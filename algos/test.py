@@ -51,7 +51,7 @@ from docopt import docopt
 from deep_logic.utils.layer import prune_logic_layers
 from algos.models import AlgorithmProcessor
 from algos.hyperparameters import get_hyperparameters
-from algos.utils import iterate_over, plot_decision_trees, load_algorithms_and_datasets
+from algos.utils import iterate_over, load_algorithms_and_datasets
 import seaborn as sns
 
 hardcode_outputs = False
@@ -59,51 +59,20 @@ def test_model(processor, path, num_nodes):
     print("PATH", path)
     processor.load_state_dict(torch.load(path))
     processor.eval()
-    processor.load_split('train', num_nodes=20)
     _BATCH_SIZE = get_hyperparameters()['batch_size']
-    hardcoding = torch.zeros(list(processor.algorithms.values())[0].concept_features, dtype=torch.bool).to(_DEVICE)
-    hardcoding[0] = False
-    hardcoding[1] = False
-    hardcoding = None
-    if not args['--no-use-concepts'] or args['--use-decision-tree']:
-        iterate_over(processor, epoch=0, extract_formulas=not args['--use-decision-tree'] and not args['--no-use-concepts'], fit_decision_tree=args['--use-decision-tree'], batch_size=_BATCH_SIZE, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
-        if args['--use-decision-tree']:
-            plot_decision_trees(processor.algorithms)
-
-    explanations = None
-    if not args['--no-use-concepts'] and not args['--use-decision-tree']:
-        for name, algorithm in processor.algorithms.items():
-            print(f"{name} EXPLANATIONS", algorithm.explanations)
-            explanations = algorithm.explanations
 
     processor.load_split('test', num_nodes=num_nodes)
 
-    iterate_over(processor, epoch=0, apply_formulas=False, apply_decision_tree=False, batch_size=_BATCH_SIZE, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
-    print("Accuracy WITHOUT applying formulas")
+    iterate_over(processor, epoch=0, batch_size=_BATCH_SIZE, hardcode_outputs=hardcode_outputs)
+    print("Accuracy")
     accs = {}
-    accs_f = {}
     for name, algorithm in processor.algorithms.items():
         pprint(f"{name} ACC")
         pprint(algorithm.get_losses_dict(validation=True))
         accs[name] = algorithm.get_validation_accuracies()
         pprint(algorithm.get_validation_accuracies())
 
-    if args['--use-decision-tree']:
-        iterate_over(processor, epoch=0, apply_formulas=False, apply_decision_tree=args['--use-decision-tree'], batch_size=_BATCH_SIZE, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
-        pprint(list(processor.algorithms.values())[0].get_losses_dict(validation=True))
-        print("Accuracy DT")
-        for name, algorithm in processor.algorithms.items():
-            pprint(f"{name} ACC")
-            pprint(algorithm.get_validation_accuracies())
-            accs_f[name] = algorithm.get_validation_accuracies()
-    if not args['--no-use-concepts'] and not args['--use-decision-tree']:
-        print("Accuracy WITH applying formulas")
-        iterate_over(processor, epoch=0, apply_formulas=True, batch_size=_BATCH_SIZE, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
-        for name, algorithm in processor.algorithms.items():
-            pprint(f"{name} ACC")
-            pprint(algorithm.get_validation_accuracies())
-            accs_f[name] = algorithm.get_validation_accuracies()
-    return accs, accs_f, explanations
+    return accs
 
 torch.cuda.manual_seed(0)
 args = docopt(__doc__)
@@ -176,11 +145,6 @@ else:
         for seed in range(args['--num-seeds']):
             mp = f'{args["--model-path"]}_seed_{seed}.pt'
             accs, accs_f, explanations = test_model(processor, mp, num_nodes)
-            if not args['--no-use-concepts']:
-                for k, v in explanations.items():
-                    if v not in formulas[k]:
-                        formulas[k][v] = 0
-                    formulas[k][v] += 1
             per_seed_accs.append(accs)
             per_seed_accs_f.append(accs_f)
 
@@ -260,9 +224,6 @@ algo0 = processor.algorithms['BFS']
 
 processor.eval()
 processor.load_split('test', num_nodes=args['--num-nodes'])
-hardcoding = torch.zeros(list(processor.algorithms.values())[0].concept_features, dtype=torch.bool).to(_DEVICE)
-hardcoding[0] = False
-hardcoding[1] = False
 iterate_over(processor, epoch=0, batch_size=1, apply_decision_tree=args['--use-decision-tree'], hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs) #FIXME
 print("Accuracy wi")
 for name, algorithm in processor.algorithms.items():
@@ -284,7 +245,7 @@ algo0.zero_steps()
 algo0.zero_tracking_losses_and_statistics()
 algo0.get_attention = True
 processor.get_attention = True
-algo0.process(toprocess, apply_decision_tree=args['--use-decision-tree'], hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
+algo0.process(toprocess, apply_decision_tree=args['--use-decision-tree'], hardcode_outputs=hardcode_outputs)
 l = len(algo0.attentions)
 print("L", l)
 g = torch_geometric.utils.to_networkx(toprocess)

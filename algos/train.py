@@ -14,11 +14,6 @@ Options:
     --use-GRU              Force the usage of a GRU cell at the GNN update step.
                            [default: False]
 
-    --no-use-concepts      Do NOT utilise concepts bottleneck. If you set this
-                           flag, set below flag too. [default: False]
-
-    --no-use-concepts-sv   Do NOT utilise concepts supervision. [default: False]
-
     --pooling=PL           What graph pooling mechanism to use for termination.
                            One of {attention, predinet, max, mean}. [default: predinet]
 
@@ -40,10 +35,6 @@ Options:
     --prune-epoch PE       The epoch on which to prune logic layers.
                            The default of -1 does no pruning at all. [default: -1]
 
-    --use-decision-tree    Use decision tree for concept->output mapping. [default: False]
-
-    --drop-last-concept    Drop last concept? (Works only for coloring) [default: False]
-
     --seed S               Random seed to set. [default: 47]
 """
 
@@ -64,7 +55,7 @@ from datetime import datetime
 from docopt import docopt
 from algos.models import AlgorithmProcessor
 from algos.hyperparameters import get_hyperparameters
-from algos.utils import iterate_over, plot_decision_trees, load_algorithms_and_datasets
+from algos.utils import iterate_over, load_algorithms_and_datasets
 from pprint import pprint
 from tqdm import tqdm
 
@@ -75,14 +66,10 @@ schema = schema.Schema({'--algos': schema.And(list, [lambda n: n in ['BFS', 'par
                         '--help': bool,
                         '--use-TF': bool,
                         '--L1-loss': bool,
-                        '--use-decision-tree': bool,
-                        '--no-use-concepts-sv': bool,
-                        '--no-use-concepts': bool,
                         '--pooling': schema.And(str, lambda s: s in ['attention', 'predinet', 'mean', 'max']),
                         '--no-next-step-pool': bool,
                         '--use-GRU': bool,
                         '--no-patience': bool,
-                        '--drop-last-concept': bool,
                         '--model-name': schema.Or(None, schema.Use(str)),
                         '--prune-epoch': schema.Use(int),
                         '--seed': schema.Use(int),
@@ -121,14 +108,10 @@ load_algorithms_and_datasets(args['--algos'],
                                  # 'datapoints_non_train': 1,
                              },
                              use_TF=args['--use-TF'],
-                             use_concepts=not args['--no-use-concepts'],
-                             use_concepts_sv=not args['--no-use-concepts-sv'],
-                             drop_last_concept=args['--drop-last-concept'],
                              pooling=args['--pooling'],
                              next_step_pool=not args['--no-next-step-pool'],
                              L1_loss=args['--L1-loss'],
                              prune_logic_epoch=args['--prune-epoch'],
-                             use_decision_tree=args['--use-decision-tree'],
                              new_coloring_dataset=False,
                              bias=get_hyperparameters()['bias'])
 
@@ -137,7 +120,6 @@ load_algorithms_and_datasets(args['--algos'],
 best_model = copy.deepcopy(processor)
 best_score = float('inf')
 
-print(processor)
 term_params = []
 normal_params = []
 for name, param in processor.named_parameters():
@@ -155,24 +137,21 @@ optimizer = optim.Adam([
 
 patience = 0
 hardcode_outputs = False
-hardcoding = torch.zeros(list(processor.algorithms.values())[0].concept_features, dtype=torch.bool).to(_DEVICE)
-hardcoding[0] = False
-hardcoding[1] = False
 hardcoding = None
 
 for epoch in range(args['--epochs']):
     processor.load_split('train')
     processor.train()
-    iterate_over(processor, optimizer=optimizer, epoch=epoch, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
-    if epoch == processor.prune_logic_epoch:
-        best_score = float('inf')
-        for name, algorithm in processor.algorithms.items():
-            if algorithm.use_concepts:
-                algorithm.concept_decoder = prune_logic_layers(
-                    algorithm.concept_decoder,
-                    epoch,
-                    algorithm.prune_logic_epoch,
-                    device=_DEVICE)
+    iterate_over(processor, optimizer=optimizer, epoch=epoch, hardcode_outputs=hardcode_outputs)
+    # if epoch == processor.prune_logic_epoch:
+    #     best_score = float('inf')
+    #     for name, algorithm in processor.algorithms.items():
+    #         if algorithm.use_concepts:
+    #             algorithm.concept_decoder = prune_logic_layers(
+    #                 algorithm.concept_decoder,
+    #                 epoch,
+    #                 algorithm.prune_logic_epoch,
+    #                 device=_DEVICE)
 
     serialised_models_dir = './algos/serialised_models/'
     if not os.path.isdir(serialised_models_dir):
@@ -183,7 +162,7 @@ for epoch in range(args['--epochs']):
     if (epoch+1) % 1 == 0:
         processor.eval()
         print("EPOCH", epoch)
-        for spl in ['train']:
+        for spl in ['val']:
             print("SPLIT", spl)
             processor.load_split(spl)
             iterate_over(processor, epoch=epoch, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
@@ -195,7 +174,7 @@ for epoch in range(args['--epochs']):
                 total_sum += sum(algorithm.get_losses_dict(validation=True).values())
             if spl == 'val':
                 patience += 1
-            if total_sum < best_score and spl == 'train':
+            if total_sum < best_score and spl == 'val':
                 best_score = total_sum
                 best_model = copy.deepcopy(processor)
                 torch.save(best_model.state_dict(), './algos/serialised_models/best_'+NAME+'.pt')
@@ -209,18 +188,10 @@ for epoch in range(args['--epochs']):
 
 torch.save(best_model.state_dict(), './algos/serialised_models/best_'+NAME+'.pt')
 
-if args['--use-decision-tree']:
-    iterate_over(best_model, fit_decision_tree=True, hardcode_concepts=hardcoding)
-    plot_decision_trees(best_model.algorithms)
-
 print("TESTING!!!")
-if not args['--no-use-concepts'] and not args['--use-decision-tree']:
-    iterate_over(best_model, extract_formulas=True, epoch=0, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
-    for algorithm in best_model.algorithms.values():
-        print("EXPLANATIONS", algorithm.explanations)
 best_model.eval()
 best_model.load_split('test')
-iterate_over(best_model, apply_formulas=True and not args['--no-use-concepts'] and not args['--use-decision-tree'], apply_decision_tree=args['--use-decision-tree'], epoch=0, hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs)
+iterate_over(best_model, epoch=0, hardcode_outputs=hardcode_outputs)
 for algorithm in best_model.algorithms.values():
     pprint(algorithm.get_validation_accuracies())
 

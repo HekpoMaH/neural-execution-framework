@@ -15,7 +15,6 @@ class AlgorithmColoring(AlgorithmBase):
     def __init__(self,
                  latent_features,
                  node_features,
-                 concept_features,
                  output_features,
                  algo_processor,
                  dataset_class,
@@ -28,7 +27,6 @@ class AlgorithmColoring(AlgorithmBase):
         super(AlgorithmColoring, self).__init__(
             latent_features,
             node_features,
-            concept_features,
             output_features,
             algo_processor,
             dataset_class,

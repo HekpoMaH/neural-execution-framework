@@ -36,7 +36,6 @@ class AlgorithmProcessor(nn.Module):
         # and the loss is the int 0
         # Now I made it not call this function if no algorithm was executed
         # i.e. all algorithms are done
-
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
