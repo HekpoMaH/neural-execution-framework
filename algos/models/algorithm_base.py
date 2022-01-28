@@ -259,6 +259,7 @@ class AlgorithmBase(nn.Module):
         output_real_masked = y_curr[mask].float()
 
         assert not torch.isnan(output_logits_masked).any(), output_logits_masked
+        assert mask_cp.any()
         # if we are not training, calculate mean step accuracy
         # for outputs/logits/predictions
         mean_accs = type(self).calculate_step_acc(type(self).get_outputs(output_logits_masked), output_real_masked, masked_batch)
@@ -438,8 +439,8 @@ class AlgorithmBase(nn.Module):
         #     print(self.step_idx, STEPS_SIZE)
         #     print(termination)
         #     input()
-        return (((not self.training and (self.step_idx <= 0 or termination.any())) or
-                 (self.training and (self.step_idx <= 0 or termination.any()))) and
+        return (((not self.training and termination.any()) or
+                 (self.training and termination.any())) and
                  self.step_idx < STEPS_SIZE)
 
     def loop_body(self,
