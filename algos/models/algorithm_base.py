@@ -258,8 +258,13 @@ class AlgorithmBase(nn.Module):
         output_logits_masked = output_logits[mask]
         output_real_masked = y_curr[mask].float()
 
+
         assert not torch.isnan(output_logits_masked).any(), output_logits_masked
         assert mask_cp.any()
+        # if not mask_cp.all():
+        #     print(self.step_idx)
+        #     print(continue_logits[~mask_cp])
+        #     input()
         # if we are not training, calculate mean step accuracy
         # for outputs/logits/predictions
         mean_accs = type(self).calculate_step_acc(type(self).get_outputs(output_logits_masked), output_real_masked, masked_batch)
@@ -296,16 +301,13 @@ class AlgorithmBase(nn.Module):
             processed_nodes = len(output_real_masked)
             loss_output = self.get_output_loss(output_logits_masked, output_real_masked)
 
-            pw = getattr(self.dataset, 'termination_pos_weights_AAAA', None)
-
             # calculate losses for termination from masked out graphs.
             # NOTE we use sum reduction as we will do the averaging later
             # (That's why we have sum of steps and sum of nodes)
             loss_term = F.binary_cross_entropy_with_logits(
                 continue_logits[mask_cp],
                 true_termination[mask_cp].float(),
-                reduction='sum',
-                pos_weight=pw)
+                reduction='sum')
             if get_hyperparameters()['calculate_termination_statistics']:
                 self.update_termination_statistics(continue_logits[mask_cp], true_termination[mask_cp].float())
 
@@ -409,7 +411,7 @@ class AlgorithmBase(nn.Module):
         else:
             losses_dict = {
                 'total_loss_output': self.lambda_mul*outmul* self.losses['total_loss_output'] / (self.sum_of_processed_nodes * self.output_features),
-                'total_loss_term': 1*self.lambda_mul*1*self.losses['total_loss_term'] / self.sum_of_steps,
+                'total_loss_term': self.lambda_mul*1*self.losses['total_loss_term'] / self.sum_of_steps,
             } if self.sum_of_processed_nodes else 0
 
         return losses_dict
@@ -434,11 +436,6 @@ class AlgorithmBase(nn.Module):
         self.hidden = torch.zeros(num_nodes, self.latent_features).to(get_hyperparameters()['device'])
 
     def loop_condition(self, termination, STEPS_SIZE):
-        # if self.step_idx > 500:
-        #     print('loop condition')
-        #     print(self.step_idx, STEPS_SIZE)
-        #     print(termination)
-        #     input()
         return (((not self.training and termination.any()) or
                  (self.training and termination.any())) and
                  self.step_idx < STEPS_SIZE)
@@ -456,14 +453,6 @@ class AlgorithmBase(nn.Module):
                 inp,
                 batch.edge_index
             )
-        # if self.step_idx > 500:
-        #     print('step', self.step_idx)
-        #     positive_false = (continue_logits > 0) & ~true_termination
-        #     print('l', continue_logits[positive_false])
-        #     print('t', true_termination[positive_false])
-        #     from pprint import pprint
-        #     pprint(list(zip(continue_logits[positive_false].tolist(), true_termination[positive_false].tolist())))
-        #     input()
 
         termination = continue_logits
 

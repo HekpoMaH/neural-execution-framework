@@ -94,5 +94,28 @@ class AlgorithmColoring(AlgorithmBase):
     def get_outputs(outputs):
         return outputs.argmax(dim=-1)
 
+    @overrides
+    def get_losses_dict(self, validation=False):
+        # NOTE Here we do the averaging. The sum (not sum of mean-reduced losses!!!)
+        # is averaged over the sum of steps (for termination outputs/logits) or the sum of
+        # all nodes ever processed (for termination outputs/logits)
+
+        # NOTE 2, note that for training, these losses are average per-batch, whereas
+        # for validation, these losses are averaged over the whole val/testing set.
+
+        term_mul = 0.05
+        if validation:
+            losses_dict = {
+                'total_loss_output': self.lambda_mul*self.losses['total_loss_output'] / (self.validation_sum_of_processed_nodes * self.output_features),
+                'total_loss_term': term_mul*self.lambda_mul*1*self.losses['total_loss_term'] / self.validation_sum_of_steps,
+            }  if self.validation_sum_of_processed_nodes else 0
+        else:
+            losses_dict = {
+                'total_loss_output': self.lambda_mul*self.losses['total_loss_output'] / (self.sum_of_processed_nodes * self.output_features),
+                'total_loss_term': term_mul*self.lambda_mul*1*self.losses['total_loss_term'] / self.sum_of_steps,
+            } if self.sum_of_processed_nodes else 0
+
+        return losses_dict
+
 if __name__ == '__main__':
     print(list(dir(AlgorithmColoring)))
