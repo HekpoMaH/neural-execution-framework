@@ -26,8 +26,6 @@ Options:
 
     --use-decision-tree    Use decision tree for concept->output mapping. [default: False]
 
-    --no-use-concepts      Do NOT utilise concepts bottleneck. [default: False]
-
     --do-plotting          Do debug plotting? [default: False]
 
     --use-seeds            Use seeds for STD. It will automatically modify name as
@@ -81,7 +79,6 @@ schema = schema.Schema({'--algos': schema.And(list, [lambda n: n in ['BFS', 'par
                         '--has-GRU': bool,
                         '--do-plotting': bool,
                         '--use-decision-tree': bool,
-                        '--no-use-concepts': bool,
                         '--pruned': bool,
                         '--pooling': schema.And(str, lambda s: s in ['attention', 'predinet', 'mean', 'max']),
                         '--no-next-step-pool': bool,
@@ -112,8 +109,6 @@ load_algorithms_and_datasets(args['--algos'],
                                  'num_nodes': args['--num-nodes'],
                              },
                              use_TF=False, # not used when testing
-                             use_concepts=not args['--no-use-concepts'],
-                             use_concepts_sv=not args['--no-use-concepts'],
                              drop_last_concept=args['--drop-last-concept'],
                              use_decision_tree=args['--use-decision-tree'],
                              get_attention=True and args['--pooling'],
@@ -139,18 +134,10 @@ else:
     def test_num_nodes(num_nodes):
         targets = get_hyperparameters()[f'dim_target_{args["--algos"][0]}']
         per_seed_accs = []
-        per_seed_accs_f = []
-        formulas = {t: {} for t in range(max(2, targets))}
-        formulas['termination'] = {}
         for seed in range(args['--num-seeds']):
             mp = f'{args["--model-path"]}_seed_{seed}.pt'
-            accs, accs_f, explanations = test_model(processor, mp, num_nodes)
+            accs = test_model(processor, mp, num_nodes)
             per_seed_accs.append(accs)
-            per_seed_accs_f.append(accs_f)
-
-        if not args['--no-use-concepts']:
-            print("formulas")
-            pprint(formulas)
 
         def combine_seed(LD, algo_names):
             DL = {}
@@ -166,30 +153,20 @@ else:
             return DL
 
         algo_per_seed_accs = combine_seed(per_seed_accs, processor.algorithms.keys())
-        print("NOF", num_nodes)
+        print("num nodes", num_nodes)
         pprint(algo_per_seed_accs)
 
-        if len(per_seed_accs_f[0]):
-            algo_per_seed_accs_f = combine_seed(per_seed_accs_f, processor.algorithms.keys())
-            print("F", num_nodes)
-            pprint(algo_per_seed_accs_f)
-        return algo_per_seed_accs, algo_per_seed_accs_f if not args['--no-use-concepts'] else None
+        return algo_per_seed_accs
 
-    algo_per_seed_accs, algo_per_seed_accs_f = test_num_nodes(args['--num-nodes'])
+    algo_per_seed_accs = test_num_nodes(args['--num-nodes'])
     if args['--all-num-nodes']:
         algo_per_seed_accs_per_numnodes = {}
-        algo_per_seed_accs_f_per_numnodes = {}
         for nn in [20, 50, 100]:
-            algo_per_seed_accs, algo_per_seed_accs_f = test_num_nodes(nn)
+            algo_per_seed_accs = test_num_nodes(nn)
             algo_per_seed_accs_per_numnodes[nn] = algo_per_seed_accs
-            algo_per_seed_accs_f_per_numnodes[nn] = algo_per_seed_accs_f
-        if args['--use-decision-tree']:
-            algo_per_seed_accs_per_numnodes = algo_per_seed_accs_f_per_numnodes
 
         print("ALL NODES")
         pprint(algo_per_seed_accs_per_numnodes)
-        print("ALL NODES F")
-        pprint(algo_per_seed_accs_f_per_numnodes)
         print('latex code\n')
 
         def print_metric(metric, dict_name, dic):
@@ -205,16 +182,7 @@ else:
         print_metric('mean-step acc', 'mean_step_acc', algo_per_seed_accs_per_numnodes)
         print_metric('last-step acc', 'last_step_acc', algo_per_seed_accs_per_numnodes)
 
-        if not args['--no-use-concepts']:
-            print_metric('formula mean-step acc', 'formula_mean_step_acc', algo_per_seed_accs_f_per_numnodes)
-            print_metric('formula last-step acc', 'formula_last_step_acc', algo_per_seed_accs_f_per_numnodes)
-
         print_metric('term. acc', 'term_mean_step_acc', algo_per_seed_accs_per_numnodes)
-        if not args['--no-use-concepts']:
-            print_metric('formula term. acc', 'term_formula_mean_step_acc', algo_per_seed_accs_f_per_numnodes)
-            print_metric('concepts mean-step acc', 'concepts_mean_step_acc', algo_per_seed_accs_per_numnodes)
-            print_metric('concepts last-step acc', 'concepts_last_step_acc', algo_per_seed_accs_per_numnodes)
-
 
 
 if not args['--do-plotting']:
