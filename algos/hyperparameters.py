@@ -23,8 +23,6 @@ def get_hyperparameters():
         'walk_length': 5,
         'max_threshold': 10,
         'patience_limit': 10,
-        'growth_rate_sigmoid': 0.0020,
-        'sigmoid_offset': -300,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         'calculate_termination_statistics': False,
         'lr': 0.0010000000000000000,
@@ -35,5 +33,6 @@ def get_hyperparameters():
         'clip_grad_value': 5,
         'bias': True,
         'seed': 47,
-        'generators': ['ER', 'ladder', 'grid', 'tree', 'BA', 'caveman', '4-community'],
+        'generators_BFS': ['ER', 'ladder', 'grid', 'tree', 'BA', 'caveman', '4-community'],
+        'generators_coloring': [], # N/A
     }

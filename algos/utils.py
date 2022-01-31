@@ -12,7 +12,7 @@ from sklearn.tree import plot_tree
 
 import deep_logic
 
-from algos.datasets import BFSSingleIterationDataset, ParallelColoringSingleGeneratorDataset, ParallelColoringDataset, CombinedGeneratorsDataset, TerminationCombinationDataset
+from algos.datasets import BFSSingleIterationDataset, ParallelColoringSingleGeneratorDataset, ParallelColoringDataset, CombinedGeneratorsDataset
 from algos.hyperparameters import get_hyperparameters
 import algos.models as models
 
@@ -78,7 +78,7 @@ def load_algorithms_and_datasets(algorithms,
                                  **kwargs):
     for algorithm in algorithms:
         algo_class = models.AlgorithmBase if algorithm == 'BFS' else models.AlgorithmColoring
-        inside_class = BFSSingleIterationDataset if algorithm == 'BFS' else ParallelColoringSingleGeneratorDataset
+        inside_class = BFSSingleIterationDataset if algorithm == 'BFS' else None
         dataclass = CombinedGeneratorsDataset if algorithm == 'BFS' or new_coloring_dataset else ParallelColoringDataset
         rootdir = f'./algos/{algorithm}'
 
@@ -90,8 +90,7 @@ def load_algorithms_and_datasets(algorithms,
             dataset_class=dataclass,
             inside_class=inside_class,
             dataset_root=rootdir,
-            dataset_kwargs=dataset_kwargs,
-            sigmoid=False,
+            dataset_kwargs=dataset_kwargs[algorithm],
             bias=bias,
             use_TF=use_TF,
             L1_loss=L1_loss,
@@ -107,7 +106,6 @@ def iterate_over(processor,
                  return_outputs=False,
                  num_classes=2,
                  hardcode_outputs=False,
-                 sigmoid=False,
                  epoch=None,
                  batch_size=None,
                  aggregate=False,**lw):

@@ -27,7 +27,7 @@ for num_nodes in NUM_NODES:
             if dataclass == CombinedGeneratorsDataset:
                 f = dataclass(rd, BFSSingleIterationDataset, split=split, node_degree=5, generators=get_hyperparameters()['generators'], num_nodes=num_nodes)
             else:
-                f = dataclass(rd, ParallelColoringDataset, split=split, node_degree=5, generators=get_hyperparameters()['generators'], num_nodes=num_nodes, datapoints_train=10, datapoints_non_train=1)
+                f = dataclass(rd, ParallelColoringDataset, split=split, node_degree=5, generators=get_hyperparameters()['generators'], num_nodes=num_nodes)
             return f
 
         for split in ['train', 'val', 'test']:
@@ -39,8 +39,7 @@ for num_nodes in NUM_NODES:
         assert len(f0[0].edge_index[0]) != len(f1[0].edge_index[0]) or not torch.eq(f0[0].edge_index, f1[0].edge_index).all()
 
 dataset = CombinedGeneratorsDataset('./algos/BFS', BFSSingleIterationDataset, split='test', generators=get_hyperparameters()['generators'], num_nodes=20)
-dataset = ParallelColoringDataset('./algos/parallel_coloring', ParallelColoringDataset, split='test', generators=get_hyperparameters()['generators'], num_nodes=20, node_degree=5, datapoints_train=10, datapoints_non_train=1)
-exit(0)
+dataset = ParallelColoringDataset('./algos/parallel_coloring', ParallelColoringDataset, split='test', generators=get_hyperparameters()['generators'], num_nodes=20, node_degree=5)
 
 NUM_NODES = [50, 100]
 for num_nodes in NUM_NODES:

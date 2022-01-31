@@ -61,29 +61,18 @@ def jones_plassmann(G, num_colors=5):
     '''
 
     # we have |C|+1 output classes, 1 for uncolored node and |C|=5 for each colour
-    # Concept encoding
-    # f0 = colored or not
-    # f1 = largest uncolored in neighb. or not (i.e. has highest priority in neighb.)
-    # f2-f6 = colors seen around 1 to 5
-    # f7-f11 = has been colored in 1 to 5
-    # E.g. for having colour 3 on the next iteration an ideal explanation is:
-    # (f0 & f9) | (~f0 & f1 & f2 & f3 & ~f4)
     num_nodes = len(G.nodes)
     priority = list({'x': x} for x in torch.randint(0, 255, (num_nodes,)).tolist())
     priority = dict(zip(range(num_nodes), priority))
     nx.set_node_attributes(G, priority)
     G = torch_geometric.utils.from_networkx(G)
     colored = torch.zeros(num_nodes, dtype=torch.long)
-    all_inp, all_target_col, all_target_concepts, all_term = [], [], [], []
-    all_target_concepts_fin = []
+    all_inp, all_target_col, all_term = [], [], []
     n1, n2 = G.edge_index.tolist()
     inp_priority = integer2bit(G.x)
-    last_concepts_real = None
     for _ in range(num_nodes+1):
         c1h = torch.nn.functional.one_hot(colored, num_classes=num_colors+1)
         all_inp.append(torch.cat((c1h, inp_priority), dim=-1).clone())
-        concepts = torch.zeros((num_nodes, get_hyperparameters()['dim_concept_parallel_coloring']), dtype=torch.int)
-        concepts[colored != 0, 0] = 1
         priority = G.x.clone()
         priority[colored != 0] = -1
         edge_priority = priority[n2]
@@ -95,7 +84,6 @@ def jones_plassmann(G, num_colors=5):
             return None
 
         to_be_colored = (colored == 0) & (received_priority < priority)
-        concepts[to_be_colored, 1] = 1
         colors_around = torch.zeros(num_nodes, num_colors, dtype=torch.bool)
         for i in range(num_colors):
             colors_sent = colored[n2] == i+1
@@ -109,23 +97,12 @@ def jones_plassmann(G, num_colors=5):
             print("REDO: colors not enough")
             return None
         colored = torch.where(to_be_colored, colors_to_receive, colored)
-        concepts[:, 2:7] = colors_around
-        concepts_fin = concepts.min(dim=0).values.unsqueeze(0)
-        all_target_concepts.append(concepts.clone())
-        all_target_concepts_fin.append(concepts_fin.clone())
         all_target_col.append(colored.clone())
         all_term.append((colored == 0).any().unsqueeze(-1))
-        if not (colored == 0).any() and last_concepts_real is None:
-            last_concepts_real = concepts.clone()
 
-    all_target_concepts_fin = [all_target_concepts_fin[i + 1]
-                               for i in range(0, len(all_target_concepts_fin)-1)] + [all_target_concepts_fin[-1]]
     data = Data(torch.stack(all_inp, dim=1),
                 edge_index=torch.tensor(G.edge_index),
                 y=torch.stack(all_target_col, dim=1),
-                concepts=torch.stack(all_target_concepts, dim=1),
-                last_concepts_real=last_concepts_real,
-                concepts_fin=torch.stack(all_target_concepts_fin, dim=1),
                 priorities=inp_priority,
                 termination=torch.stack(all_term, dim=1))
     return data

@@ -247,10 +247,6 @@ class CombinedGeneratorsDataset(_CustomInMemoryDataset):
         self.datapoints_non_train_per_generator = datapoints_non_train_per_generator
         super(CombinedGeneratorsDataset, self).__init__(root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
-        positives = self.data.concepts.flatten(start_dim=0, end_dim=1).float().sum(0)
-        negatives = len(self.data.concepts.flatten(start_dim=0, end_dim=1)) - positives
-        self.concept_pos_weights = negatives/positives
-        self.concept_pos_weights = self.concept_pos_weights.to(_DEVICE)
         positives = self.data.termination.flatten(start_dim=0, end_dim=1).float().sum(0)
         negatives = len(self.data.termination.flatten(start_dim=0, end_dim=1)) - positives
         self.termination_pos_weights = negatives/positives
@@ -301,7 +297,6 @@ class ParallelColoringDataset(_CustomInMemoryDataset):
 
     def __init__(self,
                  root,
-                 inside_class, #NOTE Ignored, so as to match constructor of other parallel coloring class
                  split='train',
                  node_degree=5,
                  transform=None,
@@ -323,10 +318,6 @@ class ParallelColoringDataset(_CustomInMemoryDataset):
         _, counts = torch.unique(torch.tensor(catted_with_artificial), return_counts=True)
         counts -= 1
         self.class_weights = torch.tensor([sum(counts)/(c * 6) for c in counts]).to(_DEVICE)
-        positives = self.data.concepts.flatten(start_dim=0, end_dim=1).float().sum(0)
-        negatives = len(self.data.concepts.flatten(start_dim=0, end_dim=1)) - positives
-        self.concept_pos_weights = negatives/positives
-        self.concept_pos_weights = self.concept_pos_weights.to(_DEVICE)
 
         positives = self.data.termination.flatten(start_dim=0, end_dim=1).float().sum(0)
         negatives = len(self.data.termination.flatten(start_dim=0, end_dim=1)) - positives
@@ -353,6 +344,9 @@ class ParallelColoringDataset(_CustomInMemoryDataset):
         super(ParallelColoringDataset, self).process()
 
 class ParallelColoringSingleGeneratorDataset(_CustomInMemoryDataset):
+    '''
+    DEPRECATED
+    '''
 
     def __init__(self,
                  root,
@@ -373,10 +367,6 @@ class ParallelColoringSingleGeneratorDataset(_CustomInMemoryDataset):
         self.data, self.slices = torch.load(self.processed_paths[0])
         _, counts = torch.unique(torch.tensor(self.data.y), return_counts=True)
         self.class_weights = torch.tensor([sum(counts)/(c * 6) for c in counts]).to(_DEVICE)
-        positives = self.data.concepts.flatten(start_dim=0, end_dim=1).float().sum(0)
-        negatives = len(self.data.concepts.flatten(start_dim=0, end_dim=1)) - positives
-        self.concept_pos_weights = negatives/positives
-        self.concept_pos_weights = self.concept_pos_weights.to(_DEVICE)
 
         positives = self.data.termination.flatten(start_dim=0, end_dim=1).float().sum(0)
         negatives = len(self.data.termination.flatten(start_dim=0, end_dim=1)) - positives
@@ -429,27 +419,7 @@ class ParallelColoringSingleGeneratorDataset(_CustomInMemoryDataset):
     def process(self):
         super(ParallelColoringSingleGeneratorDataset, self).process()
 
-class TerminationCombinationDataset: #NOTE This is NOT a pytorch dataset
-    def __init__(self, existing_dataset):
-        self.existing_dataset = existing_dataset
-        self.dataset = []
-        self.seen = set()
-        for p in self.existing_dataset:
-            for timestep in range(p.concepts.shape[1]):
-                concepts = torch.unique(p.concepts[:, timestep+1], dim=0)
-                tpl = tuple(tuple(t) for t in concepts.tolist())
-                if tpl not in self.seen:
-                    self.seen.add(tpl)
-                    self.dataset.append((concepts.numpy(), p.termination[:, timestep].numpy()))
-                if not p.termination[:, timestep].all():
-                    break
-        print(p.x.shape)
-        print(p.concepts.shape)
-
 
 if __name__ == '__main__':
     for spl in ['train', 'val', 'test']:
         f = ParallelColoringDataset('./algos/parallel_coloring', None, split=spl, num_nodes=20, generators=['ER'])
-        t = TerminationCombinationDataset(f)
-        print(type(t.dataset))
-        print(spl, len(t.dataset), len(t.seen))
