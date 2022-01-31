@@ -24,16 +24,8 @@ Options:
 
     --all-num-nodes        Just do all 20, 50, 100 nodes' tests. [default: False]
 
-    --use-decision-tree    Use decision tree for concept->output mapping. [default: False]
-
-    --do-plotting          Do debug plotting? [default: False]
-
     --use-seeds            Use seeds for STD. It will automatically modify name as
                            appropriate. [default: False]
-
-    --drop-last-concept    Drop last concept? (Works only for coloring) [default: False]
-
-    --pruned               Is concept decoder pruned? [default: False]
 
     --num-seeds NS         How many different seeds to plot. [default: 5]
 
@@ -77,13 +69,9 @@ args = docopt(__doc__)
 schema = schema.Schema({'--algos': schema.And(list, [lambda n: n in ['BFS', 'parallel_coloring']]),
                         '--help': bool,
                         '--has-GRU': bool,
-                        '--do-plotting': bool,
-                        '--use-decision-tree': bool,
-                        '--pruned': bool,
                         '--pooling': schema.And(str, lambda s: s in ['attention', 'predinet', 'mean', 'max']),
                         '--no-next-step-pool': bool,
                         '--use-seeds': bool,
-                        '--drop-last-concept': bool,
                         '--num-seeds': schema.Use(int),
                         '--num-nodes': schema.Use(int),
                         '--all-num-nodes': schema.Use(int),
@@ -99,31 +87,28 @@ processor = AlgorithmProcessor(
     use_gru=args['--has-GRU'],
 ).to(_DEVICE)
 
-_gnrtrs = get_hyperparameters()['generators']
-if 'parallel_coloring' in args['--algos']:
-    _gnrtrs += ['deg5']
 load_algorithms_and_datasets(args['--algos'],
-                             processor, {
-                                 'split': 'test',
-                                 'generators': _gnrtrs,
-                                 'num_nodes': args['--num-nodes'],
+                             processor,
+                             {
+                                 'BFS': {
+                                     'split': 'train',
+                                     'generators': get_hyperparameters()['generators_BFS'],
+                                     'num_nodes': 20,
+                                     # 'datapoints_train': 10,
+                                     # 'datapoints_non_train': 1,
+                                 },
+                                 'parallel_coloring': {
+                                     'split': 'train',
+                                     'num_nodes': 20,
+                                     # 'datapoints_train': 10,
+                                     # 'datapoints_non_train': 1,
+                                 }
                              },
                              use_TF=False, # not used when testing
-                             drop_last_concept=args['--drop-last-concept'],
-                             use_decision_tree=args['--use-decision-tree'],
                              get_attention=True and args['--pooling'],
                              pooling=args['--pooling'],
                              next_step_pool=not args['--no-next-step-pool'],
                              bias=get_hyperparameters()['bias'])
-
-if args['--pruned']:
-    for name, algorithm in processor.algorithms.items():
-        if algorithm.use_concepts:
-            algorithm.concept_decoder = prune_logic_layers(
-                algorithm.concept_decoder,
-                0,
-                0,
-                device=_DEVICE)
 
 if not args['--use-seeds']:
     processor.load_state_dict(torch.load(args['--model-path']))
@@ -183,62 +168,3 @@ else:
         print_metric('last-step acc', 'last_step_acc', algo_per_seed_accs_per_numnodes)
 
         print_metric('term. acc', 'term_mean_step_acc', algo_per_seed_accs_per_numnodes)
-
-
-if not args['--do-plotting']:
-    exit(0)
-
-algo0 = processor.algorithms['BFS']
-
-processor.eval()
-processor.load_split('test', num_nodes=args['--num-nodes'])
-iterate_over(processor, epoch=0, batch_size=1, apply_decision_tree=args['--use-decision-tree'], hardcode_concepts=hardcoding, hardcode_outputs=hardcode_outputs) #FIXME
-print("Accuracy wi")
-for name, algorithm in processor.algorithms.items():
-    pprint(f"{name} ACC")
-    pprint(algorithm.get_validation_accuracies())
-print("WrongIdx", algo0.wrong_indices)
-
-toprocess = algo0.dataset[4:5]
-print('toprocess', toprocess)
-toprocess = [el for el in DataLoader(
-            toprocess,
-            batch_size=get_hyperparameters()['batch_size'],
-            shuffle=processor.training,
-            drop_last=False)][0]
-
-algo0.zero_validation_stats()
-algo0.zero_formulas_aggregation()
-algo0.zero_steps()
-algo0.zero_tracking_losses_and_statistics()
-algo0.get_attention = True
-processor.get_attention = True
-algo0.process(toprocess, apply_decision_tree=args['--use-decision-tree'], hardcode_outputs=hardcode_outputs)
-l = len(algo0.attentions)
-print("L", l)
-g = torch_geometric.utils.to_networkx(toprocess)
-pos = nx.spring_layout(g)
-print(toprocess.x.shape)
-starting_node = (toprocess.x[0, :, 1] != 0).nonzero()[0][0]
-for i, vis in enumerate(toprocess.y):
-    if i == l or i >= 55: break
-    print('STEP', i)
-    sns.set()
-    plt.figure(i, figsize=(10, 10))
-    print(algo0.predictions['outputs'])
-    cmap = ['lime' if x != 0 else 'mediumslateblue' for x in vis]
-    cmap[starting_node] = 'darkolivegreen'
-    attentions = algo0.attentions[i].cpu().detach().numpy()
-    print('attention for termination', attentions)
-    input()
-    node_labels = [(round(x.item(), 2)) for x in attentions.sum(-1)]
-    node_labels = {i: att for i, att in enumerate(node_labels)}
-    print(node_labels)
-    print('visited nodes', vis)
-    print(g.number_of_nodes(), len(pos), len(node_labels))
-    nx.draw(g, pos=pos, width=None, node_color=cmap, with_labels=True, labels=node_labels, node_size=2250, font_size=20, font_weight='bold')
-    plt.savefig(f'./algos/figures/BFS_per_step_attention_step_{i}.png', bbox_inches='tight', pad_inches=0)
-    input()
-print("Output on last step", algo0.last_output_logits)
-plt.show()
-exit(0)

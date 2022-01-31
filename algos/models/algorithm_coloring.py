@@ -117,5 +117,11 @@ class AlgorithmColoring(AlgorithmBase):
 
         return losses_dict
 
+    def load_dataset(self, dataset_class, dataset_root, dataset_kwargs):
+        self.dataset_class = dataset_class
+        self.dataset_root = dataset_root
+        self.dataset_kwargs = dataset_kwargs
+        self.dataset = dataset_class(dataset_root, **dataset_kwargs)
+
 if __name__ == '__main__':
     print(list(dir(AlgorithmColoring)))

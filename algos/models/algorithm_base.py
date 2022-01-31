@@ -99,13 +99,10 @@ class AlgorithmBase(nn.Module):
                  use_TF=False,
                  L1_loss=False,
                  prune_logic_epoch=-1,
-                 use_decision_tree=False,
-                 activation_xlogic='sigmoid',
                  global_termination_pool='predinet', #'max',
                  next_step_pool=True,
                  get_attention=False,
                  use_batch_norm=False,
-                 sigmoid=False,
                  **kwargs):
 
         super(AlgorithmBase, self).__init__()
@@ -117,8 +114,6 @@ class AlgorithmBase(nn.Module):
         self.epoch_threshold_debug = 500
         self.L1_loss = L1_loss
         self.prune_logic_epoch = prune_logic_epoch
-        self.use_decision_tree = use_decision_tree
-        self.activation_xlogic = activation_xlogic
         self.global_termination_pool = global_termination_pool
         self.next_step_pool = next_step_pool
         self.processor = algo_processor.processor
@@ -160,22 +155,6 @@ class AlgorithmBase(nn.Module):
             nn.BatchNorm1d(latent_features) if use_batch_norm else nn.Identity(),
             nn.Linear(latent_features, 1, bias=bias),
             )
-
-    def inputify(self, x):
-        def offset_weird_leaky_relu(x, start_leak=0.05):
-            return torch.where((x+0.5) < 1, F.leaky_relu((x+0.5), start_leak), 1+5e-2*(x-0.5))
-
-        if self.activation_xlogic == 'sigmoid':
-            return torch.sigmoid(x)
-        elif self.activation_xlogic == 'offset_leaky_relu':
-            return F.leaky_relu(x+0.5)
-        elif self.activation_xlogic == 'offset_weird_leaky_relu':
-            return offset_weird_leaky_relu(x)
-        elif self.activation_xlogic == 'offset_weird_leaky_relu/2':
-            return offset_weird_leaky_relu(x/2)
-        elif self.activation_xlogic == 'offset_weird_no_start_leak_relu':
-            return offset_weird_leaky_relu(x, start_leak=0)
-        assert False, 'unknown inputification'
 
     def get_continue_logits(self, batch_ids, latent_nodes, sth_else=None):
         if self.global_termination_pool == 'mean':
@@ -438,7 +417,7 @@ class AlgorithmBase(nn.Module):
     def loop_condition(self, termination, STEPS_SIZE):
         return (((not self.training and termination.any()) or
                  (self.training and termination.any())) and
-                 self.step_idx < STEPS_SIZE)
+                 self.step_idx < STEPS_SIZE-1)
 
     def loop_body(self,
                   batch,

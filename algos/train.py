@@ -95,17 +95,22 @@ processor = AlgorithmProcessor(
     use_gru=not args['--use-TF'] or args['--use-GRU'],
 ).to(_DEVICE)
 
-_gnrtrs = get_hyperparameters()['generators']
-if 'parallel_coloring' in args['--algos']:
-    _gnrtrs += ['deg5']
-print("GENERATORS", _gnrtrs)
 load_algorithms_and_datasets(args['--algos'],
-                             processor, {
-                                 'split': 'train',
-                                 'generators': _gnrtrs,
-                                 'num_nodes': 20,
-                                 # 'datapoints_train': 10,
-                                 # 'datapoints_non_train': 1,
+                             processor, 
+                             {
+                                 'BFS': {
+                                     'split': 'train',
+                                     'generators': get_hyperparameters()['generators_BFS'],
+                                     'num_nodes': 20,
+                                     # 'datapoints_train': 10,
+                                     # 'datapoints_non_train': 1,
+                                 },
+                                 'parallel_coloring': {
+                                     'split': 'train',
+                                     'num_nodes': 20,
+                                     # 'datapoints_train': 10,
+                                     # 'datapoints_non_train': 1,
+                                 }
                              },
                              use_TF=args['--use-TF'],
                              pooling=args['--pooling'],
