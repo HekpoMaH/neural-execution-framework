@@ -53,16 +53,16 @@ class AlgorithmColoring(AlgorithmBase):
         )
 
     @overrides
-    def encode_nodes(self, inp, last_latent):
+    def encode_nodes(self, current_input, last_latent):
         def bin2dec(b, bits):
             mask = 2 ** torch.arange(bits - 1, -1, -1).to(b.device, b.dtype)
             return torch.sum(mask * b, -1)
-        colors = inp[:, :self.output_features]
-        bits = inp[:, self.output_features:] # NOTE Again, as above, bits are not parts of output
+        colors = current_input[:, :self.output_features]
+        bits = current_input[:, self.output_features:] # NOTE Again, as above, bits are not parts of output
         encoded_colors = self.color_encoder(colors)
         encoded_bits = self.bit_encoder(bits)
-        inp = torch.cat((encoded_colors, encoded_bits), dim=-1)
-        return self.node_encoder(torch.cat((inp, last_latent), dim=-1))
+        current_input = torch.cat((encoded_colors, encoded_bits), dim=-1)
+        return self.node_encoder(torch.cat((current_input, last_latent), dim=-1))
 
     @overrides
     def get_input_from_output(self, output, batch=None):
